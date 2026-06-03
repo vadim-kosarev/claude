@@ -16,9 +16,7 @@
 - **IDE:** JetBrains IDEA
 - **Shell:** PowerShell (Windows) - команды для run_in_terminal должны быть PowerShell-совместимыми. ОСЬ - Windows.
 - для новых терминалов, используемых агентом нужно вызывать команду
-   ```chcp 65001 ; $env:PYTHONIOENCODING = 'utf-8'``` - только один раз на терминал, не каждый раз перед командой
-- после этого один раз активировать виртуальное окружение из каталога проекта скриптом по полному пути:
-   ```GIT_IDE_PROJECT_ROOT\.venv\Scripts\Activate.ps1 2>&1```
+   ```chcp 65001 ; $env:PYTHONIOENCODING = 'utf-8' ; .\.venv\scripts\activate.ps1``` - только один раз на терминал, не каждый раз перед командой
 
 ### PowerShell команды (важно!)
 При использовании `run_in_terminal` tool:
@@ -28,7 +26,6 @@
 - Команды 'head' и 'tail' НЕ использовать, вместо них использовать:
   - `Get-Content -TotalCount n` для чтения первых n строк файла
   - `Get-Content -Tail n` для чтения последних n строк
-- **ОБЯЗАТЕЛЬНО** добавлять `[Console]::Out.Flush()` в конце команды для гарантированного вывода результата
 
 **Пример:**
 ```powershell
