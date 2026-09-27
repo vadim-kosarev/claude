@@ -20,6 +20,17 @@
 - requirements.txt: Внешние библиотеки фиксируй в `requirement.txt`.
 - Установка должна работать через: `pip install -r requirement.txt`.
 
+### pip в Docker-образах
+- Каждый `RUN` с `pip install` в Dockerfile — с кэш-маунтом BuildKit:
+  ```dockerfile
+  # syntax=docker/dockerfile:1
+  RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
+      pip install -r requirements.txt
+  ```
+- Кэш wheel-файлов живёт вне слоя образа и переживает промах слоя (изменился `requirements.txt` — скачивается только новое). Единый `id=pip-cache` делает кэш общим для всех Dockerfile/стадий/проектов на одном builder'е, независимо от пути `target`.
+- Первой строкой Dockerfile — `# syntax=docker/dockerfile:1` (иначе `--mount` не распознаётся).
+- **Не** ставить `--no-cache-dir` / `PIP_NO_CACHE_DIR` вместе с маунтом — это выключит сам кэш; раздувания образа нет, кэш и так вне слоя.
+
 ## Переменные окружения и конфигурация
 - .env файл: Храни переменные окружения в файле `.env` в папке запуска проекта.
 - python-dotenv: Используй `python-dotenv` для загрузки переменных из `.env` файла (`pip install python-dotenv`).
