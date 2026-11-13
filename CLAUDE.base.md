@@ -36,6 +36,52 @@ cd path; python script.py    # Правильно
 cd path && python script.py  # ОШИБКА в PowerShell
 ```
 
+## Docker: общие кэши пакетов между образами
+
+> **Правило:** при сборке образов, где внутри идёт поиск и скачивание пакетов из интернета
+> (Python, apt/zypper, Maven, Gradle, npm и т.п.), использовать **общий кэш на хосте** — один на
+> все образы, а не отдельный в каждом `Dockerfile`/слое. Где возможно и нужно — делать так по
+> умолчанию, не дожидаясь просьбы. Цель: не качать одно и то же заново при сборке каждого
+> образа и переживать обрывы сети (Docker Hub, зеркала репозиториев нередко рвут соединение).
+
+**Как:** BuildKit cache mount с **одинаковым `id`** во всех `Dockerfile` хоста — тогда кэш общий
+для всех образов, собираемых тем же builder'ом на этой машине (кэш хранится на хосте, в образ не
+попадает):
+
+| Что кэшируем | Каталог в контейнере | `id` (единый, не менять от образа к образу) |
+|---|---|---|
+| pip | `/root/.cache/pip` | `shared-pip` |
+| apt | `/var/cache/apt`, `/var/lib/apt` | `shared-apt`, `shared-apt-lists` |
+| zypper | `/var/cache/zypp` | `shared-zypp` |
+| Maven | `/root/.m2` | `shared-maven` |
+| Gradle | `/root/.gradle` | `shared-gradle` |
+| npm | `/root/.npm` | `shared-npm` |
+
+```dockerfile
+# syntax=docker/dockerfile:1
+RUN --mount=type=cache,id=shared-pip,target=/root/.cache/pip \
+    pip install -r requirements.txt
+
+# apt: у базовых образов Debian/Ubuntu кэш чистится по умолчанию -- отключить, иначе монтировать нечего
+RUN rm -f /etc/apt/apt.conf.d/docker-clean; \
+    echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+RUN --mount=type=cache,id=shared-apt,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=shared-apt-lists,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y <пакеты>
+```
+
+- Для менеджеров с блокировкой кэша (apt, zypper) — `sharing=locked`, иначе параллельные сборки
+  портят друг другу кэш.
+- **Не** добавлять в конце слоя `apt-get clean`/`rm -rf /var/lib/apt/lists/*`/`zypper clean -a`
+  там, где кэш смонтирован — это сотрёт общий кэш (в образ он и так не попадает).
+- Кэш общий **в пределах одного хоста** (одного builder'а Docker). На другой машине он свой —
+  первая сборка там по-прежнему скачивает всё; это нормально.
+- В `docker-compose.yml` ничего дополнительно не нужно: `docker compose build` использует те же
+  `--mount` из `Dockerfile`. Требуется BuildKit (включён по умолчанию в современном Docker) и
+  первая строка `# syntax=docker/dockerfile:1`.
+- Если в `Dockerfile` уже есть своё скачивание «в слой» (`zypper in`, `pip install` без mount) —
+  при следующей правке этого файла перевести на общий кэш.
+
 ## Глобальная память пользователя
 
 - Файл: `Z:\MY\MEMORY.md`
